@@ -21,6 +21,23 @@ function uuidv4() {
   );
 }
 
+const IOPort = React.forwardRef(
+  ({ type = "input", label, ...rest }, ref) => (
+    <div className={`io ${type}`} ref={ref} {...rest}>
+      {type === "input" && (
+        <>
+          {"<"} {label}
+        </>
+      )}
+      {type === "output" && (
+        <>
+          {label} {">"}
+        </>
+      )}
+    </div>
+  ),
+);
+
 function BlockTemplate({
   type,
   onMove = () => {},
@@ -29,8 +46,6 @@ function BlockTemplate({
   inputs = [],
   outputs = [],
 }) {
-  const divRef = useRef();
-
   const bind = useDrag(({ xy: [x, y], first, last }) => {
     if (first) onMoveStart({ x, y });
     if (last) onMoveEnd();
@@ -38,19 +53,15 @@ function BlockTemplate({
   });
 
   return (
-    <div {...bind()} ref={divRef} className="block">
+    <div {...bind()} className="block">
       <div className="topbar">
         <div className="title">{type}</div>
       </div>
       {inputs.map(input => (
-        <div className="io input" key={input.uuid}>
-          {"<"} {input.label}
-        </div>
+        <IOPort key={input.uuid} type="input" {...input} />
       ))}
       {outputs.map(output => (
-        <div className="io output" key={output.uuid}>
-          {output.label} {">"}
-        </div>
+        <IOPort key={output.uuid} type="output" {...output} />
       ))}
     </div>
   );
@@ -77,10 +88,7 @@ function Block({
     config: springConfig.stiff,
   });
 
-  const [dragging, setDragging] = useState(false);
   const bind = useDrag(({ delta: [px, py], last, first }) => {
-    if (first) setDragging(true);
-
     if (x === undefined || y === undefined) {
       const rect = divRef.current.getBoundingClientRect();
       x = rect.x + rect.width / 2;
@@ -90,7 +98,6 @@ function Block({
     onMove({ x: px + x, y: py + y });
 
     if (last) {
-      setDragging(false);
       onMoveEnd();
     }
   });
@@ -129,7 +136,6 @@ function Block({
       style={{
         left: px,
         top: py,
-        // position: dragging ? "absolute" : undefined
       }}
     >
       <div className="topbar">
@@ -139,24 +145,22 @@ function Block({
         </div>
       </div>
       {inputs.map(input => (
-        <div
-          className="io input"
+        <IOPort
+          type="input"
           key={input.uuid}
           ref={updateIORef(input.uuid)}
           {...bindIO(input.uuid, false)}
-        >
-          {"<"} {input.label}
-        </div>
+          {...input}
+        />
       ))}
       {outputs.map(output => (
-        <div
-          className="io output"
+        <IOPort
+          type="output"
           key={output.uuid}
           ref={updateIORef(output.uuid)}
           {...bindIO(output.uuid, true)}
-        >
-          {output.label} {">"}
-        </div>
+          {...output}
+        />
       ))}
     </animated.div>
   );
