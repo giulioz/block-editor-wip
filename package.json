@@ -6,8 +6,6 @@
   "main": "src/index.js",
   "dependencies": {
     "@material-ui/core": "4.8.3",
-    "@vx/shape": "0.0.193-alpha.2",
-    "d3": "5.15.0",
     "react": "16.12.0",
     "react-dom": "16.12.0",
     "react-scripts": "3.0.1",

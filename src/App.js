@@ -6,7 +6,6 @@ import {
 } from "react-spring";
 import { useDrag } from "react-use-gesture";
 import { CssBaseline } from "@material-ui/core";
-import * as d3 from "d3";
 
 import "./styles.css";
 
@@ -169,19 +168,27 @@ function Block({
   );
 }
 
-function Link({ ax = 0, ay = 0, bx = 0, by = 0, strokeWidth = 3 }) {
+function Link({
+  ax = 0,
+  ay = 0,
+  bx = 0,
+  by = 0,
+  strokeWidth = 3,
+  markerWidth = 2,
+  markerHeight = 4,
+}) {
   const x = Math.min(ax, bx);
   const y = Math.min(ay, by);
   const width = Math.max(ax, bx) - x;
   const height = Math.max(ay, by) - y;
 
   const src = {
-    x: ax - x + strokeWidth / 2,
-    y: ay - y + strokeWidth / 2,
+    x: ax - x + strokeWidth / 2 - markerWidth,
+    y: ay - y + strokeWidth / 2 + markerHeight,
   };
   const dst = {
-    x: bx - x + strokeWidth / 2,
-    y: by - y + strokeWidth / 2,
+    x: bx - x + strokeWidth / 2 - markerWidth,
+    y: by - y + strokeWidth / 2 + markerHeight,
   };
 
   const link = `M${src.x},${src.y}C${(src.x + dst.x) / 2},${
@@ -193,13 +200,26 @@ function Link({ ax = 0, ay = 0, bx = 0, by = 0, strokeWidth = 3 }) {
       className="svglink"
       style={{
         left: x,
-        top: y,
+        top: y - markerHeight,
       }}
-      width={width + strokeWidth}
-      height={height + strokeWidth}
+      width={width + strokeWidth + markerWidth * 2}
+      height={height + strokeWidth + markerHeight * 2}
     >
+      <defs>
+        <marker
+          id="head"
+          orient="auto"
+          markerWidth={markerWidth}
+          markerHeight={markerHeight}
+          refX={1.5}
+          refY={2}
+        >
+          <path d="M0,0 V4 L2,2 Z" fill="#C33" />
+        </marker>
+      </defs>
       <path
         d={link}
+        markerEnd="url(#head)"
         stroke="#C33"
         strokeWidth={strokeWidth}
         fill="none"
@@ -276,23 +296,24 @@ function View() {
         uuid,
         inputs: template.inputs.map(e => ({
           ...e,
-          uuid: uuid + e.uuid,
+          uuid: uuid + " " + e.uuid,
         })),
         outputs: template.outputs.map(e => ({
           ...e,
-          uuid: uuid + e.uuid,
+          uuid: uuid + " " + e.uuid,
         })),
       },
     ]);
 
     setDraggingTemplate(uuid);
   };
-  const handleMoveTemplate = pos =>
-    setBlocks(blocks =>
+  function handleMoveTemplate(pos) {
+    return setBlocks(blocks =>
       blocks.map(b =>
         b.uuid === draggingTemplate ? { ...b, ...pos } : b,
       ),
     );
+  }
   const handleMoveTemplateEnd = () => setDraggingTemplate(null);
 
   const handleMoveBlock = uuid => pos =>
@@ -364,7 +385,7 @@ function View() {
     });
   const linksWithPos = linksWithPosGen();
 
-  const [forceUpdate, setForceUpdate] = useState(0);
+  const setForceUpdate = useState(0)[1];
   function updateLinkPos() {
     const newLinksWithPos = linksWithPosGen();
     const hasToUpdate = newLinksWithPos.some(
