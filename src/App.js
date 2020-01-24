@@ -89,6 +89,7 @@ function Block({
   onDragIO = () => {},
   onDragIOStart = () => {},
   onDragIOEnd = () => {},
+  onRest = () => {},
   inputs = [],
   outputs = [],
 }) {
@@ -96,6 +97,7 @@ function Block({
     px: x || 0,
     py: y || 0,
     config: springConfig.stiff,
+    onRest,
   });
 
   const divRef = useRef();
@@ -324,47 +326,59 @@ function View() {
     );
   }
 
-  const linksWithPos = links.map(link => {
-    if (link.uuidEnd !== "tba") {
-      const startBlock = blocks.filter(
-        b =>
-          b.outputs.filter(i => i.uuid === link.uuidStart).length > 0,
-      )[0];
-      const endBlock = blocks.filter(
-        b => b.inputs.filter(i => i.uuid === link.uuidEnd).length > 0,
-      )[0];
+  const linksWithPosGen = () =>
+    links.map(link => {
+      if (link.uuidEnd !== "tba") {
+        // const startBlock = blocks.filter(
+        //   b =>
+        //     b.outputs.filter(i => i.uuid === link.uuidStart).length > 0,
+        // )[0];
+        // const endBlock = blocks.filter(
+        //   b => b.inputs.filter(i => i.uuid === link.uuidEnd).length > 0,
+        // )[0];
 
-      const elStart = document.getElementById(
-        "block-port-" + link.uuidStart,
-      );
-      const elEnd = document.getElementById(
-        "block-port-" + link.uuidEnd,
-      );
+        const elStart = document.getElementById(
+          "block-port-" + link.uuidStart,
+        );
+        const elEnd = document.getElementById(
+          "block-port-" + link.uuidEnd,
+        );
 
-      if (elStart && elEnd) {
-        const posStart = getIOPortPos(elStart, true);
-        const posEnd = getIOPortPos(elEnd, false);
+        if (elStart && elEnd) {
+          const posStart = getIOPortPos(elStart, true);
+          const posEnd = getIOPortPos(elEnd, false);
 
-        return {
-          ...link,
-          ax: posStart.x,
-          ay: posStart.y,
-          bx: posEnd.x,
-          by: posEnd.y,
-        };
+          return {
+            ...link,
+            ax: posStart.x,
+            ay: posStart.y,
+            bx: posEnd.x,
+            by: posEnd.y,
+          };
+        }
+
+        return link;
       }
 
-      return {
-        ...link,
-        ax: startBlock.x,
-        ay: startBlock.y,
-        bx: endBlock.x,
-        by: endBlock.y,
-      };
-    }
+      return link;
+    });
+  const linksWithPos = linksWithPosGen();
 
-    return link;
-  });
+  const [forceUpdate, setForceUpdate] = useState(0);
+  function updateLinkPos() {
+    const newLinksWithPos = linksWithPosGen();
+    const hasToUpdate = newLinksWithPos.some(
+      (link, i) =>
+        linksWithPos[i].ax !== link.ax ||
+        linksWithPos[i].ay !== link.ay ||
+        linksWithPos[i].bx !== link.bx ||
+        linksWithPos[i].by !== link.by,
+    );
+
+    if (hasToUpdate) {
+      setForceUpdate(i => i + 1);
+    }
+  }
 
   return (
     <>
@@ -396,6 +410,7 @@ function View() {
           onDragIOStart={handleDragIOStart}
           onDragIO={handleDragIO}
           onDragIOEnd={handleDragIOEnd}
+          onRest={updateLinkPos}
         />
       ))}
     </>
