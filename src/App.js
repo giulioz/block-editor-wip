@@ -67,12 +67,19 @@ function BlockTemplate({
   );
 }
 
+function getIOStartPos(element, right) {
+  const rect = element.getBoundingClientRect();
+  return {
+    x: right ? rect.right : rect.x,
+    y: rect.y + rect.height / 2,
+  };
+}
+
 function Block({
   x,
   y,
   type,
   onMove = () => {},
-  onMoveEnd = () => {},
   onDelete = () => {},
   onDragIO = () => {},
   onDragIOStart = () => {},
@@ -80,15 +87,14 @@ function Block({
   inputs = [],
   outputs = [],
 }) {
-  const divRef = useRef();
-
   const { px, py } = useSpring({
     px: x || 0,
     py: y || 0,
     config: springConfig.stiff,
   });
 
-  const bind = useDrag(({ delta: [px, py], last, first }) => {
+  const divRef = useRef();
+  const bind = useDrag(({ delta: [px, py] }) => {
     if (x === undefined || y === undefined) {
       const rect = divRef.current.getBoundingClientRect();
       x = rect.x + rect.width / 2;
@@ -96,10 +102,6 @@ function Block({
     }
 
     onMove({ x: px + x, y: py + y });
-
-    if (last) {
-      onMoveEnd();
-    }
   });
 
   const ioRefs = useRef({});
@@ -110,19 +112,13 @@ function Block({
   const bindIO = useDrag(
     ({ xy: [px, py], first, last, args: [uuid, right], event }) => {
       if (first) {
-        const rect = ioRefs.current[uuid].getBoundingClientRect();
-        onDragIOStart(
-          uuid,
-          {
-            x: right ? rect.right : rect.x,
-            y: rect.y + rect.height / 2,
-          },
-          { mx: px, my: py },
-        );
+        onDragIOStart(uuid, getIOStartPos(ioRefs.current[uuid], right));
       }
 
       onDragIO(uuid, { x: px, y: py });
-      if (last) onDragIOEnd(uuid);
+
+      const lastElement = document.elementFromPoint(px, py);
+      if (last) onDragIOEnd(uuid, getIOStartPos(lastElement));
 
       event.stopPropagation();
     },
@@ -266,13 +262,6 @@ const templates = [
 function View() {
   const [blocks, setBlocks] = useState([]);
 
-  const handleMove = uuid => pos =>
-    setBlocks(blocks =>
-      blocks.map(block =>
-        block.uuid === uuid ? { ...block, ...pos } : block,
-      ),
-    );
-
   const [draggingTemplate, setDraggingTemplate] = useState(null);
   const handleMoveTemplateStart = type => pos => {
     const uuid = uuidv4();
@@ -290,31 +279,33 @@ function View() {
     );
   const handleMoveTemplateEnd = () => setDraggingTemplate(null);
 
-  const handleDelete = uuid => () =>
+  const handleMoveBlock = uuid => pos =>
+    setBlocks(blocks =>
+      blocks.map(block =>
+        block.uuid === uuid ? { ...block, ...pos } : block,
+      ),
+    );
+  const handleDeleteBlock = uuid => () =>
     setBlocks(blocks => blocks.filter(block => block.uuid !== uuid));
 
   const [links, setLinks] = useState([
     // { ax: 150, ay: 50, bx: 300, by: 300 },
   ]);
-
-  function handleDragIOStart(uuid, { x, y }, { mx, my }) {
+  function handleDragIOStart(uuid, { x, y }) {
     setLinks(links => [
-      { uuid, ax: x, ay: y, bx: mx, by: my },
+      { uuid, ax: x, ay: y, bx: x, by: y },
       ...links.filter(l => l.uuid !== uuid),
     ]);
   }
-
   function handleDragIO(uuid, { x, y }) {
     setLinks(links =>
       links.map(l => (l.uuid === uuid ? { ...l, bx: x, by: y } : l)),
     );
   }
-
-  function handleDragIOEnd(uuid, { x, y }, { mx, my }) {
-    setLinks(links => [
-      { uuid, ax: x, ay: y, bx: mx, by: my },
-      ...links.filter(l => l.uuid !== uuid),
-    ]);
+  function handleDragIOEnd(uuid, { x, y }) {
+    setLinks(links =>
+      links.map(l => (l.uuid === uuid ? { ...l, bx: x, by: y } : l)),
+    );
   }
 
   return (
@@ -339,8 +330,8 @@ function View() {
         <Block
           {...block}
           key={block.uuid}
-          onMove={handleMove(block.uuid)}
-          onDelete={handleDelete(block.uuid)}
+          onMove={handleMoveBlock(block.uuid)}
+          onDelete={handleDeleteBlock(block.uuid)}
           onDragIOStart={handleDragIOStart}
           onDragIO={handleDragIO}
           onDragIOEnd={handleDragIOEnd}
