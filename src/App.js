@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from "react";
+import React, { useState, useRef } from "react";
 import {
   useSpring,
   animated,
@@ -18,6 +18,41 @@ function uuidv4() {
         v = c === "x" ? r : (r & 0x3) | 0x8;
       return v.toString(16);
     },
+  );
+}
+
+function BlockTemplate({
+  type,
+  onMove = () => {},
+  onMoveStart = () => {},
+  onMoveEnd = () => {},
+  inputs = [],
+  outputs = [],
+}) {
+  const divRef = useRef();
+
+  const bind = useDrag(({ xy: [x, y], first, last }) => {
+    if (first) onMoveStart({ x, y });
+    if (last) onMoveEnd();
+    onMove({ x: x, y: y });
+  });
+
+  return (
+    <div {...bind()} ref={divRef} className="block">
+      <div className="topbar">
+        <div className="title">{type}</div>
+      </div>
+      {inputs.map(input => (
+        <div className="io input" key={input.uuid}>
+          {"<"} {input.label}
+        </div>
+      ))}
+      {outputs.map(output => (
+        <div className="io output" key={output.uuid}>
+          {output.label} {">"}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -222,10 +257,10 @@ const templates = [
     inputs: [{ label: "Frame", uuid: uuidv4() }],
     outputs: [{ label: "Frame", uuid: uuidv4() }],
   },
-].map(t => ({ ...t, template: true }));
+];
 
 function View() {
-  const [blocks, setBlocks] = useState(templates);
+  const [blocks, setBlocks] = useState([]);
 
   const handleMove = uuid => pos =>
     setBlocks(blocks =>
@@ -234,39 +269,25 @@ function View() {
       ),
     );
 
-  const handleMoveTemplate = type => pos =>
+  const [draggingTemplate, setDraggingTemplate] = useState(null);
+  const handleMoveTemplateStart = type => pos => {
+    const uuid = uuidv4();
+    setBlocks(blocks => [
+      ...blocks,
+      { ...templates.find(t => t.type === type), ...pos, uuid },
+    ]);
+    setDraggingTemplate(uuid);
+  };
+  const handleMoveTemplate = pos =>
     setBlocks(blocks =>
-      blocks.map(block =>
-        block.template && block.type === type
-          ? { ...block, ...pos }
-          : block,
+      blocks.map(b =>
+        b.uuid === draggingTemplate ? { ...b, ...pos } : b,
       ),
     );
-
-  const handleMoveEnd = type => () =>
-    setBlocks(blocks => {
-      const disabledTemplate = blocks.map(block =>
-        block.type === type
-          ? { ...block, template: false, uuid: block.uuid || uuidv4() }
-          : block,
-      );
-
-      const currentTemplates = disabledTemplate.filter(b => b.template);
-      const missing = templates.filter(
-        t =>
-          currentTemplates.filter(c => t.type === c.type).length === 0,
-      );
-
-      return [...disabledTemplate, ...missing];
-    });
+  const handleMoveTemplateEnd = () => setDraggingTemplate(null);
 
   const handleDelete = uuid => () =>
     setBlocks(blocks => blocks.filter(block => block.uuid !== uuid));
-
-  const templatesToRender = blocks
-    .filter(b => b.template)
-    .sort((a, b) => a.type.localeCompare(b.type));
-  const blocksToRender = blocks.filter(b => !b.template);
 
   const [links, setLinks] = useState([
     // { ax: 150, ay: 50, bx: 300, by: 300 },
@@ -299,17 +320,18 @@ function View() {
       ))}
 
       <div className="drawer">
-        {templatesToRender.map(block => (
-          <Block
+        {templates.map(block => (
+          <BlockTemplate
             {...block}
             key={block.type}
-            onMove={handleMoveTemplate(block.type)}
-            onMoveEnd={handleMoveEnd(block.type)}
+            onMove={handleMoveTemplate}
+            onMoveStart={handleMoveTemplateStart(block.type)}
+            onMoveEnd={handleMoveTemplateEnd}
           />
         ))}
       </div>
 
-      {blocksToRender.map(block => (
+      {blocks.map(block => (
         <Block
           {...block}
           key={block.uuid}
