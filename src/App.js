@@ -22,8 +22,13 @@ function uuidv4() {
 }
 
 const IOPort = React.forwardRef(
-  ({ type = "input", label, ...rest }, ref) => (
-    <div className={`io ${type}`} ref={ref} {...rest}>
+  ({ type = "input", label, uuid, ...rest }, ref) => (
+    <div
+      id={"block-port-" + uuid}
+      className={`io ${type}`}
+      ref={ref}
+      {...rest}
+    >
       {type === "input" && (
         <>
           {"<"} {label}
@@ -67,7 +72,7 @@ function BlockTemplate({
   );
 }
 
-function getIOStartPos(element, right) {
+function getIOPortPos(element, right) {
   const rect = element.getBoundingClientRect();
   return {
     x: right ? rect.right : rect.x,
@@ -112,13 +117,13 @@ function Block({
   const bindIO = useDrag(
     ({ xy: [px, py], first, last, args: [uuid, right], event }) => {
       if (first) {
-        onDragIOStart(uuid, getIOStartPos(ioRefs.current[uuid], right));
+        onDragIOStart(uuid, getIOPortPos(ioRefs.current[uuid], right));
       }
 
       onDragIO(uuid, { x: px, y: py });
 
       const lastElement = document.elementFromPoint(px, py);
-      if (last) onDragIOEnd(uuid, getIOStartPos(lastElement));
+      if (last) onDragIOEnd(uuid, lastElement.id.substring(11));
 
       event.stopPropagation();
     },
@@ -145,7 +150,7 @@ function Block({
           type="input"
           key={input.uuid}
           ref={updateIORef(input.uuid)}
-          {...bindIO(input.uuid, false)}
+          // {...bindIO(input.uuid, false)}
           {...input}
         />
       ))}
@@ -162,13 +167,7 @@ function Block({
   );
 }
 
-function Link({
-  ax = 100,
-  ay = 0,
-  bx = 200,
-  by = 50,
-  strokeWidth = 3,
-}) {
+function Link({ ax = 0, ay = 0, bx = 0, by = 0, strokeWidth = 3 }) {
   const x = Math.min(ax, bx);
   const y = Math.min(ay, by);
   const width = Math.max(ax, bx) - x;
@@ -199,7 +198,7 @@ function Link({
     >
       <path
         d={link}
-        stroke="red"
+        stroke="#C33"
         strokeWidth={strokeWidth}
         fill="none"
       />
@@ -265,10 +264,25 @@ function View() {
   const [draggingTemplate, setDraggingTemplate] = useState(null);
   const handleMoveTemplateStart = type => pos => {
     const uuid = uuidv4();
+    const template = templates.find(t => t.type === type);
+
     setBlocks(blocks => [
       ...blocks,
-      { ...templates.find(t => t.type === type), ...pos, uuid },
+      {
+        ...template,
+        ...pos,
+        uuid,
+        inputs: template.inputs.map(e => ({
+          ...e,
+          uuid: uuid + e.uuid,
+        })),
+        outputs: template.outputs.map(e => ({
+          ...e,
+          uuid: uuid + e.uuid,
+        })),
+      },
     ]);
+
     setDraggingTemplate(uuid);
   };
   const handleMoveTemplate = pos =>
@@ -288,30 +302,77 @@ function View() {
   const handleDeleteBlock = uuid => () =>
     setBlocks(blocks => blocks.filter(block => block.uuid !== uuid));
 
-  const [links, setLinks] = useState([
-    // { ax: 150, ay: 50, bx: 300, by: 300 },
-  ]);
-  function handleDragIOStart(uuid, { x, y }) {
+  const [links, setLinks] = useState([]);
+  function handleDragIOStart(uuidStart, { x, y }) {
     setLinks(links => [
-      { uuid, ax: x, ay: y, bx: x, by: y },
-      ...links.filter(l => l.uuid !== uuid),
+      { uuidStart, uuidEnd: "tba", ax: x, ay: y, bx: x, by: y },
+      ...links.filter(l => l.uuidStart !== uuidStart),
     ]);
   }
-  function handleDragIO(uuid, { x, y }) {
+  function handleDragIO(uuidStart, { x, y }) {
     setLinks(links =>
-      links.map(l => (l.uuid === uuid ? { ...l, bx: x, by: y } : l)),
+      links.map(l =>
+        l.uuidStart === uuidStart ? { ...l, bx: x, by: y } : l,
+      ),
     );
   }
-  function handleDragIOEnd(uuid, { x, y }) {
+  function handleDragIOEnd(uuidStart, uuidEnd) {
     setLinks(links =>
-      links.map(l => (l.uuid === uuid ? { ...l, bx: x, by: y } : l)),
+      links.map(l =>
+        l.uuidStart === uuidStart ? { uuidStart, uuidEnd } : l,
+      ),
     );
   }
 
+  const linksWithPos = links.map(link => {
+    if (link.uuidEnd !== "tba") {
+      const startBlock = blocks.filter(
+        b =>
+          b.outputs.filter(i => i.uuid === link.uuidStart).length > 0,
+      )[0];
+      const endBlock = blocks.filter(
+        b => b.inputs.filter(i => i.uuid === link.uuidEnd).length > 0,
+      )[0];
+
+      const elStart = document.getElementById(
+        "block-port-" + link.uuidStart,
+      );
+      const elEnd = document.getElementById(
+        "block-port-" + link.uuidEnd,
+      );
+
+      if (elStart && elEnd) {
+        const posStart = getIOPortPos(elStart, true);
+        const posEnd = getIOPortPos(elEnd, false);
+
+        return {
+          ...link,
+          ax: posStart.x,
+          ay: posStart.y,
+          bx: posEnd.x,
+          by: posEnd.y,
+        };
+      }
+
+      return {
+        ...link,
+        ax: startBlock.x,
+        ay: startBlock.y,
+        bx: endBlock.x,
+        by: endBlock.y,
+      };
+    }
+
+    return link;
+  });
+
   return (
     <>
-      {links.map(link => (
-        <Link {...link} key={link.uuid + "link"} />
+      {linksWithPos.map(link => (
+        <Link
+          {...link}
+          key={link.uuidStart + "-link-" + link.uuidEnd}
+        />
       ))}
 
       <div className="drawer">
